@@ -130,6 +130,12 @@ class SubscManApp {
      */
     bindEvents() {
         document.addEventListener('DOMContentLoaded', async () => {
+            // 初期のログインボタンにイベントを設定（Firebase auth状態確認前）
+            const initialLoginBtn = document.getElementById('btn-login');
+            if (initialLoginBtn) {
+                initialLoginBtn.addEventListener('click', () => this.handleLogin());
+            }
+
             // 初期データ読み込み
             await ui.refreshAll();
         });
