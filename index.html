@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SubscMan - サブスク管理アプリ</title>
+    <meta name="description" content="サブスクリプションサービスの支出を管理・可視化する家計管理アプリ">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- ヘッダー -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-brand">
+                    <div class="logo">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="32" height="32" rx="8" fill="url(#logo-gradient)" />
+                            <path d="M10 16C10 12.6863 12.6863 10 16 10C19.3137 10 22 12.6863 22 16" stroke="white"
+                                stroke-width="2.5" stroke-linecap="round" />
+                            <path d="M10 20C10 16.6863 12.6863 14 16 14C19.3137 14 22 16.6863 22 20" stroke="white"
+                                stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+                            <circle cx="16" cy="22" r="2" fill="white" />
+                            <defs>
+                                <linearGradient id="logo-gradient" x1="0" y1="0" x2="32" y2="32"
+                                    gradientUnits="userSpaceOnUse">
+                                    <stop stop-color="#3B82F6" />
+                                    <stop offset="1" stop-color="#1D4ED8" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    <h1 class="app-title">SubscMan</h1>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-icon" id="btn-exchange-rate" title="為替レート設定">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="2" y1="12" x2="22" y2="12" />
+                            <path
+                                d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                        </svg>
+                    </button>
+                    <button class="btn btn-primary" id="btn-add-subscription">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        <span>追加する</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- メインコンテンツ -->
+        <main class="main-content">
+            <!-- サマリーカード -->
+            <section class="summary-cards">
+                <div class="card summary-card">
+                    <div class="summary-icon monthly">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                            <line x1="16" y1="2" x2="16" y2="6" />
+                            <line x1="8" y1="2" x2="8" y2="6" />
+                            <line x1="3" y1="10" x2="21" y2="10" />
+                        </svg>
+                    </div>
+                    <div class="summary-content">
+                        <p class="summary-label">月額課金合計</p>
+                        <p class="summary-value" id="total-monthly">¥0</p>
+                    </div>
+                </div>
+                <div class="card summary-card">
+                    <div class="summary-icon yearly">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                    </div>
+                    <div class="summary-content">
+                        <p class="summary-label">年額課金合計</p>
+                        <p class="summary-value" id="total-yearly">¥0</p>
+                    </div>
+                </div>
+                <div class="card summary-card">
+                    <div class="summary-icon count">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="8.5" cy="7" r="4" />
+                            <line x1="20" y1="8" x2="20" y2="14" />
+                            <line x1="23" y1="11" x2="17" y2="11" />
+                        </svg>
+                    </div>
+                    <div class="summary-content">
+                        <p class="summary-label">契約数</p>
+                        <p class="summary-value" id="total-count">0件</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2カラムレイアウト -->
+            <section class="two-column">
+                <!-- 左：円グラフ -->
+                <div class="card chart-card">
+                    <h2 class="card-title">カテゴリ別支出（月額）</h2>
+                    <div class="chart-container">
+                        <canvas id="category-chart"></canvas>
+                    </div>
+                    <div class="chart-legend" id="chart-legend"></div>
+                </div>
+
+                <!-- 右：サブスク管理のコツ -->
+                <div class="card tips-card">
+                    <h2 class="card-title">💡 サブスク管理のコツ</h2>
+                    <ul class="tips-list">
+                        <li>
+                            <span class="tip-icon">🗑️</span>
+                            <span>使っていないサービスは即解約しましょう。</span>
+                        </li>
+                        <li>
+                            <span class="tip-icon">💰</span>
+                            <span>年払いは月換算にすると意外と高いことがあります。</span>
+                        </li>
+                        <li>
+                            <span class="tip-icon">🔄</span>
+                            <span>同じカテゴリーの重複サービスを見直しましょう。</span>
+                        </li>
+                        <li>
+                            <span class="tip-icon">🤖</span>
+                            <span>特に「AI」カテゴリのサブスクは、似た機能のものが重複していないか確認しましょう。</span>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- AIアドバイザーセクション -->
+            <section class="ai-advisor-section">
+                <h2 class="section-title">🤖 AIファイナンシャルアドバイザー</h2>
+                <div class="ai-advisor-container">
+                    <!-- 相談入力 -->
+                    <div class="card ai-input-card">
+                        <h3 class="card-subtitle">相談内容を入力</h3>
+                        <textarea id="ai-input" class="ai-textarea"
+                            placeholder="例：月の支出を減らしたいです。どのサブスクを見直すべきでしょうか？"></textarea>
+                        <div class="ai-input-actions">
+                            <button class="btn btn-secondary btn-sm" id="btn-ai-settings">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="3" />
+                                    <path
+                                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                                </svg>
+                                API設定
+                            </button>
+                            <button class="btn btn-primary" id="btn-ask-ai">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="22" y1="2" x2="11" y2="13" />
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                                </svg>
+                                AIに相談する
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- AI回答 -->
+                    <div class="card ai-response-card">
+                        <h3 class="card-subtitle">AIからのアドバイス</h3>
+                        <div class="ai-response" id="ai-response">
+                            <div class="ai-placeholder">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                </svg>
+                                <p>左の入力欄に相談内容を入力して<br>「AIに相談する」ボタンを押してください</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- サブスク一覧 -->
+            <section class="subscription-list-section">
+                <div class="section-header">
+                    <h2 class="section-title">📋 サブスク一覧</h2>
+                    <div class="filter-controls">
+                        <select id="filter-category" class="select-filter">
+                            <option value="">すべてのカテゴリ</option>
+                            <option value="エンタメ">エンタメ</option>
+                            <option value="仕事">仕事</option>
+                            <option value="教育">教育</option>
+                            <option value="生活">生活</option>
+                            <option value="AI">AI</option>
+                            <option value="その他">その他</option>
+                        </select>
+                        <select id="filter-cycle" class="select-filter">
+                            <option value="">すべてのサイクル</option>
+                            <option value="月払い">月払い</option>
+                            <option value="年払い">年払い</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card table-card">
+                    <div class="table-responsive">
+                        <table class="subscription-table" id="subscription-table">
+                            <thead>
+                                <tr>
+                                    <th>サービス名</th>
+                                    <th class="sortable" data-sort="original">元の金額</th>
+                                    <th class="sortable active" data-sort="monthly">
+                                        月額（円）
+                                        <span class="sort-icon">▼</span>
+                                    </th>
+                                    <th>カテゴリ</th>
+                                    <th>サイクル</th>
+                                    <th>開始日</th>
+                                    <th>次回請求日</th>
+                                    <th>アクション</th>
+                                </tr>
+                            </thead>
+                            <tbody id="subscription-tbody">
+                                <!-- JavaScript で動的に生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty-state" id="empty-state">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="12" y1="18" x2="12" y2="12" />
+                            <line x1="9" y1="15" x2="15" y2="15" />
+                        </svg>
+                        <p>サブスクがまだ登録されていません</p>
+                        <button class="btn btn-primary" id="btn-add-first">追加する</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- フッター -->
+        <footer class="footer">
+            <p>&copy; 2024 SubscMan - サブスク管理アプリ</p>
+        </footer>
+    </div>
+
+    <!-- モーダル：サブスク追加/編集 -->
+    <div class="modal-overlay" id="modal-subscription">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modal-subscription-title">サブスクを追加</h2>
+                <button class="btn-close" id="btn-close-subscription">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <form class="modal-body" id="form-subscription">
+                <input type="hidden" id="edit-id">
+                <div class="form-group">
+                    <label for="service-name">サービス名 <span class="required">*</span></label>
+                    <input type="text" id="service-name" required placeholder="例：Netflix">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="amount-original">金額 <span class="required">*</span></label>
+                        <input type="number" id="amount-original" required min="0" step="0.01" placeholder="例：1000">
+                    </div>
+                    <div class="form-group">
+                        <label for="currency">通貨 <span class="required">*</span></label>
+                        <select id="currency" required>
+                            <option value="JPY">JPY（円）</option>
+                            <option value="USD">USD（ドル）</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="billing-cycle">支払いサイクル</label>
+                        <select id="billing-cycle">
+                            <option value="月払い">月払い</option>
+                            <option value="年払い">年払い</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="category">カテゴリ</label>
+                        <select id="category">
+                            <option value="エンタメ">エンタメ</option>
+                            <option value="仕事">仕事</option>
+                            <option value="教育">教育</option>
+                            <option value="生活">生活</option>
+                            <option value="AI">AI</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="start-date">開始日</label>
+                        <input type="date" id="start-date">
+                    </div>
+                    <div class="form-group">
+                        <label for="next-billing-date">次回請求日</label>
+                        <input type="date" id="next-billing-date">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="memo">メモ</label>
+                    <textarea id="memo" rows="3" placeholder="メモがあれば入力してください"></textarea>
+                </div>
+                <div class="form-preview" id="form-preview">
+                    <p class="preview-label">計算プレビュー</p>
+                    <p class="preview-value">月額: <span id="preview-monthly">¥0</span> / 年額: <span
+                            id="preview-yearly">¥0</span></p>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-subscription">キャンセル</button>
+                    <button type="submit" class="btn btn-primary">保存する</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- モーダル：為替レート設定 -->
+    <div class="modal-overlay" id="modal-exchange-rate">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2 class="modal-title">為替レート設定</h2>
+                <button class="btn-close" id="btn-close-exchange">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="exchange-rate-display">
+                    <p class="exchange-label">現在のレート</p>
+                    <p class="exchange-value">1 USD = <span id="current-rate">150.00</span> JPY</p>
+                    <p class="exchange-updated" id="rate-updated">最終更新: --</p>
+                </div>
+                <div class="form-group">
+                    <label for="new-rate">新しいレート（JPY/USD）</label>
+                    <input type="number" id="new-rate" min="0" step="0.01" placeholder="例：155.00">
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="btn-fetch-rate">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10" />
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                        </svg>
+                        最新を取得
+                    </button>
+                    <button class="btn btn-primary" id="btn-save-rate">保存する</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダル：削除確認 -->
+    <div class="modal-overlay" id="modal-delete-confirm">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2 class="modal-title">削除の確認</h2>
+                <button class="btn-close" id="btn-close-delete">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="delete-message">「<span id="delete-service-name"></span>」を削除しますか？</p>
+                <p class="delete-note">この操作は取り消せません。</p>
+                <input type="hidden" id="delete-id">
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="btn-cancel-delete">キャンセル</button>
+                    <button class="btn btn-danger" id="btn-confirm-delete">削除する</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダル：API設定 -->
+    <div class="modal-overlay" id="modal-api-settings">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2 class="modal-title">Google Gemini API設定</h2>
+                <button class="btn-close" id="btn-close-api">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="api-note">AIアドバイザー機能を使用するには、Google API キーが必要です。</p>
+                <div class="form-group">
+                    <label for="api-key">APIキー</label>
+                    <input type="password" id="api-key" placeholder="AIzaSy...">
+                </div>
+                <p class="api-hint">
+                    <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>
+                    でAPIキーを取得できます（無料）。
+                </p>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="btn-cancel-api">キャンセル</button>
+                    <button class="btn btn-primary" id="btn-save-api">保存する</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- トースト通知 -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- JavaScriptファイル読み込み -->
+    <script src="js/storage.js"></script>
+    <script src="js/calculator.js"></script>
+    <script src="js/ai-advisor.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>
