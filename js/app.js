@@ -1,235 +1,140 @@
 /**
- * SubscMan - メインアプリケーション
- * イベントリスナーの設定とアプリ初期化
+ * SubscMan - メインアプリケーションモジュール
+ * アプリ全体の初期化とイベントリスナーの設定
+ * Firebase認証との連携
  */
 
 class SubscManApp {
     constructor() {
-        this.init();
+        this.bindEvents();
+        this.initializeAuth();
     }
 
     /**
-     * アプリケーション初期化
+     * Firebase認証の初期化と状態監視
      */
-    init() {
-        // DOM読み込み完了後に実行
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.setup());
+    initializeAuth() {
+        // 認証状態の変化を監視
+        firebaseAuth.onAuthStateChanged(async (user) => {
+            this.updateAuthUI(user);
+            await this.refreshData();
+        });
+    }
+
+    /**
+     * 認証UIを更新
+     * @param {Object|null} user - ユーザー情報
+     */
+    updateAuthUI(user) {
+        const authStatus = document.getElementById('auth-status');
+
+        if (user) {
+            // ログイン済み
+            authStatus.innerHTML = `
+                <div class="user-info">
+                    <img src="${user.photoURL || ''}" alt="" class="user-avatar" onerror="this.style.display='none'">
+                    <span class="user-name">${user.displayName || 'ユーザー'}</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="btn-logout">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+                    ログアウト
+                </button>
+            `;
+
+            // ログアウトボタンにイベント追加
+            document.getElementById('btn-logout').addEventListener('click', () => this.handleLogout());
+
+            // 同期ボタンを表示（初回ログイン時にローカルデータをアップロード）
+            this.checkAndOfferSync();
         } else {
-            this.setup();
+            // 未ログイン
+            authStatus.innerHTML = `
+                <button class="btn btn-secondary btn-sm" id="btn-login">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                        <polyline points="10 17 15 12 10 7" />
+                        <line x1="15" y1="12" x2="3" y2="12" />
+                    </svg>
+                    ログイン
+                </button>
+            `;
+
+            // ログインボタンにイベント追加
+            document.getElementById('btn-login').addEventListener('click', () => this.handleLogin());
         }
     }
 
     /**
-     * セットアップ処理
+     * ローカルデータがあれば同期を提案
      */
-    setup() {
-        this.attachEventListeners();
-        ui.refreshAll();
-
-        // 初回起動時にサンプルデータを投入するか確認
-        const subscriptions = storage.getSubscriptions(false);
-        if (subscriptions.length === 0) {
-            this.showWelcomePrompt();
-        }
-    }
-
-    /**
-     * 初回起動時のウェルカムプロンプト
-     */
-    showWelcomePrompt() {
-        // 少し遅延させて表示
-        setTimeout(() => {
-            const loadSample = confirm(
-                'SubscMan へようこそ！\n\n' +
-                'サンプルデータを読み込んでアプリの使い方を確認しますか？\n' +
-                '（後で削除できます）'
+    async checkAndOfferSync() {
+        const localSubs = storage.getSubscriptionsLocal(false);
+        if (localSubs.length > 0) {
+            const shouldSync = confirm(
+                `ローカルに${localSubs.length}件のサブスクデータがあります。\nクラウドにアップロードして同期しますか？`
             );
 
-            if (loadSample) {
-                storage.loadSampleData();
-                ui.refreshAll();
-                ui.showToast('サンプルデータを読み込みました', 'success');
+            if (shouldSync) {
+                const success = await storage.uploadLocalDataToFirestore();
+                if (success) {
+                    ui.showToast('データをクラウドにアップロードしました！', 'success');
+                    await this.refreshData();
+                } else {
+                    ui.showToast('アップロードに失敗しました', 'error');
+                }
             }
-        }, 500);
+        }
+    }
+
+    /**
+     * Googleログイン処理
+     */
+    async handleLogin() {
+        try {
+            await firebaseAuth.signInWithGoogle();
+            ui.showToast('ログインしました！', 'success');
+        } catch (error) {
+            console.error('Login error:', error);
+            ui.showToast('ログインに失敗しました: ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * ログアウト処理
+     */
+    async handleLogout() {
+        try {
+            await firebaseAuth.signOut();
+            ui.showToast('ログアウトしました', 'success');
+        } catch (error) {
+            console.error('Logout error:', error);
+            ui.showToast('ログアウトに失敗しました', 'error');
+        }
+    }
+
+    /**
+     * データを再読み込みしてUIを更新
+     */
+    async refreshData() {
+        await ui.refreshAll();
     }
 
     /**
      * イベントリスナーを設定
      */
-    attachEventListeners() {
-        // ===================================
-        // ヘッダーボタン
-        // ===================================
-
-        // 追加ボタン
-        document.getElementById('btn-add-subscription').addEventListener('click', () => {
-            ui.openAddModal();
-        });
-
-        // 為替レート設定ボタン
-        document.getElementById('btn-exchange-rate').addEventListener('click', () => {
-            ui.openExchangeRateModal();
-        });
-
-        // 空状態の追加ボタン
-        document.getElementById('btn-add-first')?.addEventListener('click', () => {
-            ui.openAddModal();
-        });
-
-        // ===================================
-        // サブスクモーダル
-        // ===================================
-
-        // 閉じるボタン
-        document.getElementById('btn-close-subscription').addEventListener('click', () => {
-            ui.closeModal('modal-subscription');
-        });
-
-        // キャンセルボタン
-        document.getElementById('btn-cancel-subscription').addEventListener('click', () => {
-            ui.closeModal('modal-subscription');
-        });
-
-        // フォーム送信
-        document.getElementById('form-subscription').addEventListener('submit', (e) => {
-            e.preventDefault();
-            ui.handleFormSubmit();
-        });
-
-        // フォームの変更でプレビュー更新
-        ['amount-original', 'currency', 'billing-cycle'].forEach(id => {
-            document.getElementById(id).addEventListener('input', () => {
-                ui.updateFormPreview();
-            });
-            document.getElementById(id).addEventListener('change', () => {
-                ui.updateFormPreview();
-            });
-        });
-
-        // ===================================
-        // 為替レートモーダル
-        // ===================================
-
-        // 閉じるボタン
-        document.getElementById('btn-close-exchange').addEventListener('click', () => {
-            ui.closeModal('modal-exchange-rate');
-        });
-
-        // 保存ボタン
-        document.getElementById('btn-save-rate').addEventListener('click', () => {
-            ui.saveExchangeRate();
-        });
-
-        // 最新を取得ボタン
-        document.getElementById('btn-fetch-rate').addEventListener('click', () => {
-            ui.fetchExchangeRate();
-        });
-
-        // ===================================
-        // 削除確認モーダル
-        // ===================================
-
-        // 閉じるボタン
-        document.getElementById('btn-close-delete').addEventListener('click', () => {
-            ui.closeModal('modal-delete-confirm');
-        });
-
-        // キャンセルボタン
-        document.getElementById('btn-cancel-delete').addEventListener('click', () => {
-            ui.closeModal('modal-delete-confirm');
-        });
-
-        // 削除実行ボタン
-        document.getElementById('btn-confirm-delete').addEventListener('click', () => {
-            ui.handleDelete();
-        });
-
-        // ===================================
-        // API設定モーダル
-        // ===================================
-
-        // 閉じるボタン
-        document.getElementById('btn-close-api').addEventListener('click', () => {
-            ui.closeModal('modal-api-settings');
-        });
-
-        // キャンセルボタン
-        document.getElementById('btn-cancel-api').addEventListener('click', () => {
-            ui.closeModal('modal-api-settings');
-        });
-
-        // 保存ボタン
-        document.getElementById('btn-save-api').addEventListener('click', () => {
-            ui.saveApiSettings();
-        });
-
-        // ===================================
-        // AIアドバイザー
-        // ===================================
-
-        // 相談ボタン
-        document.getElementById('btn-ask-ai').addEventListener('click', () => {
-            ui.askAI();
-        });
-
-        // API設定ボタン
-        document.getElementById('btn-ai-settings').addEventListener('click', () => {
-            ui.openApiSettingsModal();
-        });
-
-        // Enter + Cmd/Ctrl で送信
-        document.getElementById('ai-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                ui.askAI();
-            }
-        });
-
-        // ===================================
-        // テーブル操作
-        // ===================================
-
-        // ソート
-        document.querySelectorAll('.subscription-table th.sortable').forEach(th => {
-            th.addEventListener('click', () => {
-                const column = th.dataset.sort;
-                ui.sortTable(column);
-            });
-        });
-
-        // フィルタ
-        document.getElementById('filter-category').addEventListener('change', () => {
-            ui.filterTable();
-        });
-
-        document.getElementById('filter-cycle').addEventListener('change', () => {
-            ui.filterTable();
-        });
-
-        // ===================================
-        // モーダル背景クリックで閉じる
-        // ===================================
-
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) {
-                    ui.closeAllModals();
-                }
-            });
-        });
-
-        // ===================================
-        // ESCキーでモーダルを閉じる
-        // ===================================
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                ui.closeAllModals();
-            }
+    bindEvents() {
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 初期データ読み込み
+            await ui.refreshAll();
         });
     }
 }
 
-// アプリケーション起動
+// アプリケーションを初期化
 const app = new SubscManApp();

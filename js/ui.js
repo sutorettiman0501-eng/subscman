@@ -27,8 +27,8 @@ class SubscManUI {
     /**
      * サマリーカードを更新
      */
-    updateSummaryCards() {
-        const subscriptions = storage.getSubscriptions(true);
+    async updateSummaryCards() {
+        const subscriptions = await storage.getSubscriptions(true);
 
         const totalMonthly = calculator.getTotalMonthly(subscriptions);
         const totalYearly = calculator.getTotalYearly(subscriptions);
@@ -42,8 +42,8 @@ class SubscManUI {
     /**
      * カテゴリ別円グラフを更新
      */
-    updateCategoryChart() {
-        const subscriptions = storage.getSubscriptions(true);
+    async updateCategoryChart() {
+        const subscriptions = await storage.getSubscriptions(true);
         const breakdown = calculator.getCategoryBreakdown(subscriptions);
 
         const labels = Object.keys(breakdown);
@@ -132,8 +132,8 @@ class SubscManUI {
     /**
      * サブスク一覧テーブルを更新
      */
-    updateSubscriptionTable() {
-        const subscriptions = storage.getSubscriptions(true);
+    async updateSubscriptionTable() {
+        const subscriptions = await storage.getSubscriptions(true);
         const tbody = document.getElementById('subscription-tbody');
         const emptyState = document.getElementById('empty-state');
 
@@ -257,11 +257,11 @@ class SubscManUI {
     /**
      * 全UIを更新
      */
-    refreshAll() {
-        this.updateSummaryCards();
-        this.updateCategoryChart();
-        this.updateSubscriptionTable();
-        this.updateExchangeRateDisplay();
+    async refreshAll() {
+        await this.updateSummaryCards();
+        await this.updateCategoryChart();
+        await this.updateSubscriptionTable();
+        await this.updateExchangeRateDisplay();
     }
 
     // ===================================
@@ -283,8 +283,8 @@ class SubscManUI {
      * 編集モーダルを開く
      * @param {string} id - サブスクリプションID
      */
-    openEditModal(id) {
-        const sub = storage.getSubscriptionById(id);
+    async openEditModal(id) {
+        const sub = await storage.getSubscriptionById(id);
         if (!sub) {
             this.showToast('サブスクが見つかりません', 'error');
             return;
@@ -309,8 +309,8 @@ class SubscManUI {
      * 削除確認モーダルを開く
      * @param {string} id - サブスクリプションID
      */
-    openDeleteConfirm(id) {
-        const sub = storage.getSubscriptionById(id);
+    async openDeleteConfirm(id) {
+        const sub = await storage.getSubscriptionById(id);
         if (!sub) {
             this.showToast('サブスクが見つかりません', 'error');
             return;
@@ -374,12 +374,12 @@ class SubscManUI {
     /**
      * フォームのプレビューを更新
      */
-    updateFormPreview() {
+    async updateFormPreview() {
         const amountOriginal = parseFloat(document.getElementById('amount-original').value) || 0;
         const currency = document.getElementById('currency').value;
         const billingCycle = document.getElementById('billing-cycle').value;
 
-        const settings = storage.getSettings();
+        const settings = await storage.getSettings();
         const amounts = calculator.calculateAmounts({
             amount_original: amountOriginal,
             currency: currency,
@@ -393,7 +393,7 @@ class SubscManUI {
     /**
      * サブスクフォームを送信
      */
-    handleFormSubmit() {
+    async handleFormSubmit() {
         const form = document.getElementById('form-subscription');
         const editId = document.getElementById('edit-id').value;
 
@@ -419,33 +419,33 @@ class SubscManUI {
         }
 
         // 金額を計算
-        const settings = storage.getSettings();
+        const settings = await storage.getSettings();
         const amounts = calculator.calculateAmounts(data, settings.usd_to_jpy_rate);
         data.amount_jpy_monthly = amounts.amount_jpy_monthly;
         data.amount_jpy_yearly = amounts.amount_jpy_yearly;
 
         if (editId) {
             // 更新
-            storage.updateSubscription(editId, data);
+            await storage.updateSubscription(editId, data);
             this.showToast('サブスクを更新しました', 'success');
         } else {
             // 新規追加
-            storage.addSubscription(data);
+            await storage.addSubscription(data);
             this.showToast('サブスクを追加しました', 'success');
         }
 
         this.closeModal('modal-subscription');
-        this.refreshAll();
+        await this.refreshAll();
     }
 
     /**
      * サブスクを削除
      */
-    handleDelete() {
+    async handleDelete() {
         const id = document.getElementById('delete-id').value;
 
         // 物理削除を実行
-        const result = storage.deleteSubscription(id);
+        const result = await storage.deleteSubscription(id);
 
         if (result) {
             this.showToast('サブスクを削除しました', 'success');
@@ -454,7 +454,7 @@ class SubscManUI {
         }
 
         this.closeModal('modal-delete-confirm');
-        this.refreshAll();
+        await this.refreshAll();
     }
 
     // ===================================
@@ -464,8 +464,8 @@ class SubscManUI {
     /**
      * 為替レート表示を更新
      */
-    updateExchangeRateDisplay() {
-        const settings = storage.getSettings();
+    async updateExchangeRateDisplay() {
+        const settings = await storage.getSettings();
         document.getElementById('current-rate').textContent = settings.usd_to_jpy_rate.toFixed(2);
 
         const lastUpdated = settings.last_updated
@@ -477,7 +477,7 @@ class SubscManUI {
     /**
      * 為替レートを手動で保存
      */
-    saveExchangeRate() {
+    async saveExchangeRate() {
         const newRate = parseFloat(document.getElementById('new-rate').value);
 
         if (isNaN(newRate) || newRate <= 0) {
@@ -485,10 +485,10 @@ class SubscManUI {
             return;
         }
 
-        storage.updateExchangeRate(newRate);
+        await storage.updateExchangeRate(newRate);
         this.showToast('為替レートを更新しました', 'success');
         this.closeModal('modal-exchange-rate');
-        this.refreshAll();
+        await this.refreshAll();
     }
 
     /**
@@ -514,8 +514,8 @@ class SubscManUI {
                 throw new Error('レートが取得できませんでした');
             }
 
-            storage.updateExchangeRate(rate);
-            this.updateExchangeRateDisplay();
+            await storage.updateExchangeRate(rate);
+            await this.updateExchangeRateDisplay();
             this.showToast(`為替レートを更新しました: ${rate.toFixed(2)} 円/ドル`, 'success');
 
         } catch (error) {

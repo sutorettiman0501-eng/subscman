@@ -6,8 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SubscMan - サブスク管理アプリ</title>
     <meta name="description" content="サブスクリプションサービスの支出を管理・可視化する家計管理アプリ">
-    <link rel="stylesheet" href="css/style.css?v=3">
+    <link rel="stylesheet" href="css/style.css?v=4">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
 
 <body>
@@ -36,6 +40,18 @@
                     <h1 class="app-title">SubscMan</h1>
                 </div>
                 <div class="header-actions">
+                    <!-- ログイン状態表示 -->
+                    <div class="auth-status" id="auth-status">
+                        <button class="btn btn-secondary btn-sm" id="btn-login">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                                <polyline points="10 17 15 12 10 7" />
+                                <line x1="15" y1="12" x2="3" y2="12" />
+                            </svg>
+                            ログイン
+                        </button>
+                    </div>
                     <button class="btn btn-icon" id="btn-exchange-rate" title="為替レート設定">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -432,6 +448,7 @@
     <div class="toast-container" id="toast-container"></div>
 
     <!-- JavaScriptファイル読み込み -->
+    <script src="js/firebase-config.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/calculator.js"></script>
     <script src="js/ai-advisor.js"></script>

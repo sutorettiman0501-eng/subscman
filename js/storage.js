@@ -1,6 +1,7 @@
 /**
- * SubscMan - LocalStorage データ管理モジュール
- * サブスクリプションと設定データの永続化を担当
+ * SubscMan - Firebase Firestore データ管理モジュール
+ * Firestore を使ったデータ永続化（クラウド同期対応）
+ * ログインしていない場合はLocalStorageにフォールバック
  */
 
 class SubscManStorage {
@@ -8,50 +9,123 @@ class SubscManStorage {
         this.SUBSCRIPTIONS_KEY = 'subscman_subscriptions';
         this.SETTINGS_KEY = 'subscman_settings';
         this.API_KEY_KEY = 'subscman_api_key';
-        
-        // 初回起動時はデフォルトデータを投入
+
+        // LocalStorage初期化
         this.initializeIfEmpty();
     }
-    
+
+    // ===================================
+    // ユーザー関連
+    // ===================================
+
+    /**
+     * 現在のユーザーIDを取得
+     * @returns {string|null} ユーザーID
+     */
+    getUserId() {
+        if (typeof firebaseAuth !== 'undefined' && firebaseAuth.isLoggedIn()) {
+            return firebaseAuth.getCurrentUser().uid;
+        }
+        return null;
+    }
+
+    /**
+     * Firestoreを使用するかどうか
+     * @returns {boolean}
+     */
+    useFirestore() {
+        return this.getUserId() !== null;
+    }
+
+    /**
+     * ユーザーのFirestoreコレクション参照を取得
+     * @param {string} collection - コレクション名
+     * @returns {Object} Firestore コレクション参照
+     */
+    getUserCollection(collection) {
+        const userId = this.getUserId();
+        if (!userId) return null;
+        return db.collection('users').doc(userId).collection(collection);
+    }
+
     // ===================================
     // Subscriptions コレクション
     // ===================================
-    
+
     /**
      * 全サブスクリプションを取得
      * @param {boolean} activeOnly - true の場合、is_active = true のみ取得
-     * @returns {Array} サブスクリプション配列
+     * @returns {Promise<Array>} サブスクリプション配列
      */
-    getSubscriptions(activeOnly = true) {
+    async getSubscriptions(activeOnly = true) {
+        if (this.useFirestore()) {
+            try {
+                const collection = this.getUserCollection('subscriptions');
+                let query = collection;
+
+                if (activeOnly) {
+                    query = collection.where('is_active', '==', true);
+                }
+
+                const snapshot = await query.get();
+                return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (error) {
+                console.error('Firestore getSubscriptions error:', error);
+                return this.getSubscriptionsLocal(activeOnly);
+            }
+        }
+        return this.getSubscriptionsLocal(activeOnly);
+    }
+
+    /**
+     * LocalStorageから全サブスクリプションを取得
+     */
+    getSubscriptionsLocal(activeOnly = true) {
         const data = localStorage.getItem(this.SUBSCRIPTIONS_KEY);
         const subscriptions = data ? JSON.parse(data) : [];
-        
+
         if (activeOnly) {
             return subscriptions.filter(sub => sub.is_active);
         }
         return subscriptions;
     }
-    
+
     /**
      * IDでサブスクリプションを取得
      * @param {string} id - サブスクリプションID
-     * @returns {Object|null} サブスクリプションオブジェクト
+     * @returns {Promise<Object|null>} サブスクリプションオブジェクト
      */
-    getSubscriptionById(id) {
-        const subscriptions = this.getSubscriptions(false);
+    async getSubscriptionById(id) {
+        if (this.useFirestore()) {
+            try {
+                const doc = await this.getUserCollection('subscriptions').doc(id).get();
+                if (doc.exists) {
+                    return { id: doc.id, ...doc.data() };
+                }
+                return null;
+            } catch (error) {
+                console.error('Firestore getSubscriptionById error:', error);
+                return this.getSubscriptionByIdLocal(id);
+            }
+        }
+        return this.getSubscriptionByIdLocal(id);
+    }
+
+    /**
+     * LocalStorageからIDでサブスクリプションを取得
+     */
+    getSubscriptionByIdLocal(id) {
+        const subscriptions = this.getSubscriptionsLocal(false);
         return subscriptions.find(sub => sub.id === id) || null;
     }
-    
+
     /**
      * サブスクリプションを追加
      * @param {Object} data - サブスクリプションデータ
-     * @returns {Object} 追加されたサブスクリプション
+     * @returns {Promise<Object>} 追加されたサブスクリプション
      */
-    addSubscription(data) {
-        const subscriptions = this.getSubscriptions(false);
-        
+    async addSubscription(data) {
         const newSubscription = {
-            id: this.generateId(),
             service_name: data.service_name,
             amount_original: parseFloat(data.amount_original),
             currency: data.currency,
@@ -66,149 +140,220 @@ class SubscManStorage {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };
-        
+
+        if (this.useFirestore()) {
+            try {
+                const docRef = await this.getUserCollection('subscriptions').add(newSubscription);
+                return { id: docRef.id, ...newSubscription };
+            } catch (error) {
+                console.error('Firestore addSubscription error:', error);
+                return this.addSubscriptionLocal(newSubscription);
+            }
+        }
+        return this.addSubscriptionLocal(newSubscription);
+    }
+
+    /**
+     * LocalStorageにサブスクリプションを追加
+     */
+    addSubscriptionLocal(data) {
+        const subscriptions = this.getSubscriptionsLocal(false);
+        const newSubscription = {
+            id: this.generateId(),
+            ...data
+        };
         subscriptions.push(newSubscription);
         localStorage.setItem(this.SUBSCRIPTIONS_KEY, JSON.stringify(subscriptions));
-        
         return newSubscription;
     }
-    
+
     /**
      * サブスクリプションを更新
      * @param {string} id - サブスクリプションID
      * @param {Object} data - 更新データ
-     * @returns {Object|null} 更新されたサブスクリプション
+     * @returns {Promise<Object|null>} 更新されたサブスクリプション
      */
-    updateSubscription(id, data) {
-        const subscriptions = this.getSubscriptions(false);
-        const index = subscriptions.findIndex(sub => sub.id === id);
-        
-        if (index === -1) {
-            return null;
-        }
-        
-        subscriptions[index] = {
-            ...subscriptions[index],
+    async updateSubscription(id, data) {
+        const updateData = {
             ...data,
             updated_at: new Date().toISOString()
         };
-        
+
+        if (this.useFirestore()) {
+            try {
+                await this.getUserCollection('subscriptions').doc(id).update(updateData);
+                return { id, ...updateData };
+            } catch (error) {
+                console.error('Firestore updateSubscription error:', error);
+                return this.updateSubscriptionLocal(id, updateData);
+            }
+        }
+        return this.updateSubscriptionLocal(id, updateData);
+    }
+
+    /**
+     * LocalStorageでサブスクリプションを更新
+     */
+    updateSubscriptionLocal(id, data) {
+        const subscriptions = this.getSubscriptionsLocal(false);
+        const index = subscriptions.findIndex(sub => sub.id === id);
+
+        if (index === -1) {
+            return null;
+        }
+
+        subscriptions[index] = {
+            ...subscriptions[index],
+            ...data
+        };
+
         localStorage.setItem(this.SUBSCRIPTIONS_KEY, JSON.stringify(subscriptions));
-        
         return subscriptions[index];
     }
-    
+
     /**
      * サブスクリプションを削除（物理削除）
      * @param {string} id - サブスクリプションID
-     * @returns {boolean} 削除成功/失敗
+     * @returns {Promise<boolean>} 削除成功/失敗
      */
-    deleteSubscription(id) {
-        const subscriptions = this.getSubscriptions(false);
+    async deleteSubscription(id) {
+        if (this.useFirestore()) {
+            try {
+                await this.getUserCollection('subscriptions').doc(id).delete();
+                return true;
+            } catch (error) {
+                console.error('Firestore deleteSubscription error:', error);
+                return this.deleteSubscriptionLocal(id);
+            }
+        }
+        return this.deleteSubscriptionLocal(id);
+    }
+
+    /**
+     * LocalStorageでサブスクリプションを削除
+     */
+    deleteSubscriptionLocal(id) {
+        const subscriptions = this.getSubscriptionsLocal(false);
         const filtered = subscriptions.filter(sub => sub.id !== id);
-        
+
         if (filtered.length === subscriptions.length) {
             return false;
         }
-        
+
         localStorage.setItem(this.SUBSCRIPTIONS_KEY, JSON.stringify(filtered));
         return true;
     }
-    
-    /**
-     * サブスクリプションを非アクティブ化（論理削除）
-     * @param {string} id - サブスクリプションID
-     * @returns {Object|null} 更新されたサブスクリプション
-     */
-    deactivateSubscription(id) {
-        return this.updateSubscription(id, { is_active: false });
-    }
-    
+
     // ===================================
     // Settings コレクション
     // ===================================
-    
+
     /**
      * 設定を取得
-     * @returns {Object} 設定オブジェクト
+     * @returns {Promise<Object>} 設定オブジェクト
      */
-    getSettings() {
+    async getSettings() {
+        if (this.useFirestore()) {
+            try {
+                const doc = await db.collection('users').doc(this.getUserId()).get();
+                if (doc.exists && doc.data().settings) {
+                    return doc.data().settings;
+                }
+            } catch (error) {
+                console.error('Firestore getSettings error:', error);
+            }
+        }
+        return this.getSettingsLocal();
+    }
+
+    /**
+     * LocalStorageから設定を取得
+     */
+    getSettingsLocal() {
         const data = localStorage.getItem(this.SETTINGS_KEY);
         return data ? JSON.parse(data) : this.getDefaultSettings();
     }
-    
+
     /**
      * 為替レートを更新
      * @param {number} rate - USD/JPY レート
-     * @returns {Object} 更新された設定
+     * @returns {Promise<Object>} 更新された設定
      */
-    updateExchangeRate(rate) {
-        const settings = this.getSettings();
+    async updateExchangeRate(rate) {
+        const settings = await this.getSettings();
         settings.usd_to_jpy_rate = parseFloat(rate);
         settings.last_updated = new Date().toISOString();
-        
+
+        if (this.useFirestore()) {
+            try {
+                await db.collection('users').doc(this.getUserId()).set(
+                    { settings },
+                    { merge: true }
+                );
+            } catch (error) {
+                console.error('Firestore updateExchangeRate error:', error);
+            }
+        }
+
         localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(settings));
-        
         return settings;
     }
-    
-    /**
-     * 設定を更新
-     * @param {Object} data - 更新データ
-     * @returns {Object} 更新された設定
-     */
-    updateSettings(data) {
-        const settings = this.getSettings();
-        const updated = { ...settings, ...data };
-        
-        localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(updated));
-        
-        return updated;
-    }
-    
+
     // ===================================
     // API キー管理
     // ===================================
-    
-    /**
-     * OpenAI API キーを取得
-     * @returns {string|null} APIキー
-     */
+
     getApiKey() {
         return localStorage.getItem(this.API_KEY_KEY);
     }
-    
-    /**
-     * OpenAI API キーを保存
-     * @param {string} key - APIキー
-     */
+
     setApiKey(key) {
         localStorage.setItem(this.API_KEY_KEY, key);
     }
-    
-    /**
-     * OpenAI API キーを削除
-     */
+
     removeApiKey() {
         localStorage.removeItem(this.API_KEY_KEY);
     }
-    
+
+    // ===================================
+    // データ同期
+    // ===================================
+
+    /**
+     * LocalStorageのデータをFirestoreにアップロード
+     */
+    async uploadLocalDataToFirestore() {
+        if (!this.useFirestore()) return;
+
+        const localSubs = this.getSubscriptionsLocal(false);
+        const batch = db.batch();
+        const collection = this.getUserCollection('subscriptions');
+
+        for (const sub of localSubs) {
+            const docRef = collection.doc();
+            const { id, ...data } = sub;
+            batch.set(docRef, data);
+        }
+
+        try {
+            await batch.commit();
+            // アップロード成功後、ローカルデータをクリア
+            localStorage.removeItem(this.SUBSCRIPTIONS_KEY);
+            return true;
+        } catch (error) {
+            console.error('Upload to Firestore error:', error);
+            return false;
+        }
+    }
+
     // ===================================
     // ユーティリティ
     // ===================================
-    
-    /**
-     * ユニークIDを生成
-     * @returns {string} ユニークID
-     */
+
     generateId() {
         return 'sub_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
     }
-    
-    /**
-     * デフォルト設定を取得
-     * @returns {Object} デフォルト設定
-     */
+
     getDefaultSettings() {
         return {
             id: 'settings_1',
@@ -216,26 +361,20 @@ class SubscManStorage {
             last_updated: new Date().toISOString()
         };
     }
-    
-    /**
-     * 初回起動時のデータ初期化
-     */
+
     initializeIfEmpty() {
-        // 設定が存在しない場合はデフォルト設定を保存
         if (!localStorage.getItem(this.SETTINGS_KEY)) {
             localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(this.getDefaultSettings()));
         }
-        
-        // サブスクリプションが存在しない場合は空配列を保存
         if (!localStorage.getItem(this.SUBSCRIPTIONS_KEY)) {
             localStorage.setItem(this.SUBSCRIPTIONS_KEY, JSON.stringify([]));
         }
     }
-    
+
     /**
      * サンプルデータを投入（デモ用）
      */
-    loadSampleData() {
+    async loadSampleData() {
         const sampleSubscriptions = [
             {
                 service_name: 'Netflix',
@@ -266,80 +405,18 @@ class SubscManStorage {
                 start_date: '2023-03-01',
                 next_billing_date: '2024-12-01',
                 memo: 'GPT-4使用可能'
-            },
-            {
-                service_name: 'Claude Pro',
-                amount_original: 20,
-                currency: 'USD',
-                billing_cycle: '月払い',
-                category: 'AI',
-                start_date: '2024-01-15',
-                next_billing_date: '2024-12-15',
-                memo: ''
-            },
-            {
-                service_name: 'Microsoft 365',
-                amount_original: 12984,
-                currency: 'JPY',
-                billing_cycle: '年払い',
-                category: '仕事',
-                start_date: '2023-04-01',
-                next_billing_date: '2025-04-01',
-                memo: 'Family プラン'
-            },
-            {
-                service_name: 'Adobe Creative Cloud',
-                amount_original: 6480,
-                currency: 'JPY',
-                billing_cycle: '月払い',
-                category: '仕事',
-                start_date: '2022-09-01',
-                next_billing_date: '2024-12-01',
-                memo: 'フォトプラン'
-            },
-            {
-                service_name: 'Duolingo Plus',
-                amount_original: 8800,
-                currency: 'JPY',
-                billing_cycle: '年払い',
-                category: '教育',
-                start_date: '2024-02-01',
-                next_billing_date: '2025-02-01',
-                memo: '英語学習'
-            },
-            {
-                service_name: 'Amazon Prime',
-                amount_original: 4900,
-                currency: 'JPY',
-                billing_cycle: '年払い',
-                category: '生活',
-                start_date: '2021-11-01',
-                next_billing_date: '2024-11-01',
-                memo: ''
             }
         ];
-        
-        // 為替レートを取得して金額を計算
-        const settings = this.getSettings();
-        const calculator = new SubscriptionCalculator();
-        
-        sampleSubscriptions.forEach(sub => {
+
+        const settings = await this.getSettings();
+
+        for (const sub of sampleSubscriptions) {
             const amounts = calculator.calculateAmounts(sub, settings.usd_to_jpy_rate);
-            this.addSubscription({
+            await this.addSubscription({
                 ...sub,
                 ...amounts
             });
-        });
-    }
-    
-    /**
-     * 全データをクリア
-     */
-    clearAllData() {
-        localStorage.removeItem(this.SUBSCRIPTIONS_KEY);
-        localStorage.removeItem(this.SETTINGS_KEY);
-        localStorage.removeItem(this.API_KEY_KEY);
-        this.initializeIfEmpty();
+        }
     }
 }
 
