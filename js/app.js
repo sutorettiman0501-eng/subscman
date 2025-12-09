@@ -136,6 +136,76 @@ class SubscManApp {
                 initialLoginBtn.addEventListener('click', () => this.handleLogin());
             }
 
+            // ===================================
+            // ヘッダーボタン
+            // ===================================
+            document.getElementById('btn-add-subscription').addEventListener('click', () => ui.openAddModal());
+            document.getElementById('btn-exchange-rate').addEventListener('click', () => ui.openExchangeRateModal());
+            document.getElementById('btn-add-first')?.addEventListener('click', () => ui.openAddModal());
+
+            // ===================================
+            // サブスクモーダル
+            // ===================================
+            document.getElementById('btn-close-subscription').addEventListener('click', () => ui.closeModal('modal-subscription'));
+            document.getElementById('btn-cancel-subscription').addEventListener('click', () => ui.closeModal('modal-subscription'));
+            document.getElementById('form-subscription').addEventListener('submit', (e) => {
+                e.preventDefault();
+                ui.handleFormSubmit();
+            });
+
+            // フォームプレビュー更新
+            ['amount-original', 'currency', 'billing-cycle'].forEach(id => {
+                document.getElementById(id).addEventListener('change', () => ui.updateFormPreview());
+                document.getElementById(id).addEventListener('input', () => ui.updateFormPreview());
+            });
+
+            // ===================================
+            // 削除確認モーダル
+            // ===================================
+            document.getElementById('btn-close-delete').addEventListener('click', () => ui.closeModal('modal-delete-confirm'));
+            document.getElementById('btn-cancel-delete').addEventListener('click', () => ui.closeModal('modal-delete-confirm'));
+            document.getElementById('btn-confirm-delete').addEventListener('click', () => ui.handleDelete());
+
+            // ===================================
+            // 為替レートモーダル
+            // ===================================
+            document.getElementById('btn-close-exchange').addEventListener('click', () => ui.closeModal('modal-exchange-rate'));
+            document.getElementById('btn-save-rate').addEventListener('click', () => ui.saveExchangeRate());
+            document.getElementById('btn-fetch-rate').addEventListener('click', () => ui.fetchExchangeRate());
+
+            // ===================================
+            // API設定モーダル
+            // ===================================
+            document.getElementById('btn-ai-settings').addEventListener('click', () => ui.openApiSettingsModal());
+            document.getElementById('btn-close-api').addEventListener('click', () => ui.closeModal('modal-api-settings'));
+            document.getElementById('btn-cancel-api').addEventListener('click', () => ui.closeModal('modal-api-settings'));
+            document.getElementById('btn-save-api').addEventListener('click', () => ui.saveApiSettings());
+
+            // ===================================
+            // AIアドバイザー
+            // ===================================
+            document.getElementById('btn-ask-ai').addEventListener('click', () => ui.askAI());
+
+            // ===================================
+            // テーブルフィルター
+            // ===================================
+            document.getElementById('filter-category').addEventListener('change', () => ui.filterTable());
+            document.getElementById('filter-cycle').addEventListener('change', () => ui.filterTable());
+
+            // テーブルソート
+            document.querySelectorAll('.subscription-table th.sortable').forEach(th => {
+                th.addEventListener('click', () => ui.sortTable(th.dataset.sort));
+            });
+
+            // モーダル背景クリックで閉じる
+            document.querySelectorAll('.modal-overlay').forEach(overlay => {
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) {
+                        ui.closeAllModals();
+                    }
+                });
+            });
+
             // 初期データ読み込み
             await ui.refreshAll();
         });
